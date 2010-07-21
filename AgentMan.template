@@ -1,0 +1,103 @@
+#!/bin/bash
+# /usr/local/bin/AgentMan-template, 0.53
+# AgentMan - AgentManager fuer getriggerte Backups, dz
+
+# SRC und BAK müssen auf "/" enden
+SRC="SSSSS"
+BAK="BBBBB"
+SRCLAST="LLLLL"
+BACKSCRIPT="/usr/local/bin/BSBSBS"
+RANDOMPART="RPRPRP"
+
+AGLIB="/Library/LaunchDaemons/"
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+
+writeAndStartAgent ()
+{   echo "Erzeuge Agent ${AGLIB}${doc}_${RANDOMPART}.plist..."
+	# Datei anlegen und Zeile fuer Zeile fuellen
+	# Agent heisst so wie die zu sichernde Datei plus ${RANDOMPART}.plist
+	touch "${AGLIB}${doc}_${RANDOMPART}.plist"
+	cat >> "${AGLIB}${doc}_${RANDOMPART}.plist" <<-EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+	<dict>
+		<key>Disabled</key>
+		<false/>
+		<key>Debug</key>
+		<true/>
+		<key>Label</key>
+		<string>de.ctmagazin.TriggerBackup.${doc}_${RANDOMPART}</string>
+		<key>ProgramArguments</key>
+		<array>
+			<string>$BACKSCRIPT</string>
+			<string>$doc</string>
+		</array>
+		<key>KeepAlive</key>
+		<false/>
+		<key>WatchPaths</key>
+		<array>
+  			<string>$SRC$doc</string>
+		</array>
+	</dict>
+</plist>
+EOF
+	# Agent starten
+	echo "Lade Agent ${AGLIB}${doc}_${RANDOMPART}.plist..."
+	launchctl load -w "${AGLIB}${doc}_${RANDOMPART}.plist"
+	echo ""
+}
+
+if ! [ -f "$SRCLAST" ]; then
+    touch "$SRCLAST"
+fi
+
+echo ""
+echo "makeAgent: suche Dateien:"
+
+# wenn Verzeichnis SRC vorhanden
+if [ -d "$SRC" ]; then
+    cd "$SRC"
+    # Debug-Info
+    echo "Diese Dateien gefunden in ${SRC}:"
+    ls "$SRC"
+    echo ""
+	ls "$SRC" | while read doc; do 
+	echo "Gefundene Datei $doc"
+# wenn Datei existiert...
+    if [ -f "${SRC}${doc}" ]; then
+	echo "Suche Agenten für ${SRC}${doc}..."
+	echo ""
+# und wenn Agent nicht existiert
+# und wenn die Datei nicht .DS_Store ist...
+	  if [ ! -f "${AGLIB}${doc}_${RANDOMPART}.plist" -a "$doc" != ".DS_Store" ]; then
+		# dann neuen Agent machen:
+	    echo "Kein Agent gefunden, lege einen an..."
+	    writeAndStartAgent
+	   fi 
+    fi
+    done
+fi
+
+# ab dem zweiten Durchlauf:
+# falls die Datei nicht mehr existiert, Agent stoppen und loeschen
+if [ -f "$SRCLAST" ]; then
+    # Debug-Info
+     echo "Diese Dateien stehen in ${SRCLAST}:"
+     cat "$SRCLAST"
+     echo ""
+     while read doc; do 
+# wenn die in SRCLAST gemerkte Datei in SRC nicht vorhanden...
+     if ! [ -f "${SRC}${doc}" ]; then
+	echo "${SRC}${doc} nicht gefunden"
+# und wenn $AGLIB"$doc" existiert...
+     if [ -f "${AGLIB}${doc}_${RANDOMPART}.plist" ]; then 
+	echo "Agenten ${AGLIB}${doc}_${RANDOMPART}.plist stoppen und löschen..."
+	launchctl unload -w "${AGLIB}${doc}_${RANDOMPART}.plist"; rm "${AGLIB}${doc}_${RANDOMPART}.plist";
+	fi    fi
+    done < "$SRCLAST"
+fi
+
+# Verzeichnisinhalt für den nächsten Durchlauf merken
+ls "$SRC" > "$SRCLAST"

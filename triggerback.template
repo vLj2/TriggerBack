@@ -1,0 +1,66 @@
+#!/bin/bash -
+# /usr/local/bin/back-template, 0.53
+# -     getriggertes Dateibackup , dz 2009
+#
+# Zweck:
+# einfaches Backup von neu angelegten Dokumenten:
+# legt aktuelle Datei unkomprimiert im Backup-Ordner BAK ab
+# und haelt bis zu fuenf komprimierte Versionen dort vor
+#
+# Voraussetzungen:
+# 
+# - LaunchDaemon "makeBackupAgent.plist" und das Skript "AgentMan-template";
+#  beide erzeugen einen LaunchAgent automatisch und dieser LaunchAgent
+#  stoesst das Skript back-template an, wenn sich eine vom 
+#  LaunchAgent ueberwachte Datei aendert
+# - Der Agent uebergibt back-template den Dateinamen als Kommandozeilenargument
+#
+# erzeugt auf:
+#
+# - Intel-Mac, Mac OS X 10.5.6, 10.5.7
+#
+# Funktion: 
+# - wird vom (gleichnamigen) LaunchAgent automatisch gestartet,
+# wenn dieser im Source-Pfad SRC$1 eine Aenderung feststellt
+#
+# - rotiert komprimierte Dateien im Ordner BAK
+# und kopiert dann geaenderte Datei
+# aus dem Source-Pfad SRC ins Backup-Verzeichnis BAK
+#
+# Fortgang und Fehlermeldungen sind zu finden in /var/log/console.log 
+
+# SRC und BAK müssen auf "/" enden
+SRC="SSSSS"
+BAK="BBBBB"
+
+PATH=/bin:/usr/bin:/sbin:/usr/sbin
+host=`hostname -s`
+
+if [[ $# != 1 ]]
+then
+echo Usage: triggerback erwartet Dateinamen aus "$SRC" >&2
+exit 1
+fi
+
+cd $BAK
+echo ""
+echo "Übergebener Dateiname $1"
+# erstmal im Backup-Ordner Dateien rotieren, sodass fuer neue Datei Platz geschaffen wird
+
+# Nur wenn Datei "$SRC""$1" geändert (-N)
+if [ -N "$SRC""$1" ]; then
+    echo "Rotating $1"
+    echo " "
+# Archive falls vorhanden umbenennen und kopieren (rotieren), sodass bis zu 6 Versionen gefuehrt werden
+    # ditto statt cp und gzip, weil so RSRC-Forks erhalten bleiben
+    if [ -x /usr/bin/ditto ]; then ext=".cpio"; else ext=""; fi
+    for((i=4; i>=0; i--)) {
+      if [ -f "${1}"".${i}${ext}" ]; then mv -f "${1}"".${i}${ext}" "${1}"".$[$i+1]${ext}"; fi
+    }
+fi
+
+cd "$SRC"
+echo " "
+# juengste Dateiversion des ueberwachten Files archivieren
+if [ -N "$SRC""$1" ]; then echo "dittoing "$1" to $BAK" && ditto -c "$SRC""$1" $BAK"$1"".0${ext}"; echo "done"; fi
+echo " "
